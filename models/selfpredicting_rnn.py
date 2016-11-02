@@ -66,16 +66,17 @@ class Color:
         return color + s + Color.close
 
 # Parameters for the model and dataset
-INVERT = False ## invert the input script
+INVERT = True ## invert the input script
+LEN_LIMIT = 12
 # Try replacing GRU, or SimpleRNN
 RNN = recurrent.LSTM
 HIDDEN_SIZE = 128
-BATCH_SIZE = 16
+BATCH_SIZE = 64
 LAYERS = 1
-NB_EPOCH = 10
+NB_EPOCH = 1
 
 def cleanse(script) :
-    return script.translate({ord(c) : None for c in "'ˌ:/"})
+    return script.translate({ord(c) : None for c in "'ˌ/:&+}"})
 
 scripts = set()
 print('Preparing data...')
@@ -84,14 +85,16 @@ with open(INPUT_FILENAME) as f :
         data = json.loads(line)
         script = data.get("phonemic-script")
         if script is not None :
-            scripts.add(cleanse(script))
+            script = cleanse(script)
+            if len(script) <= LEN_LIMIT :
+                scripts.add(script)
 print('Total scripts:', len(scripts))
 
 MAXLEN = max(map(len, scripts))
 print('Maximum length:', MAXLEN)
 scripts = [script + ' ' * (MAXLEN - len(script)) for script in scripts]
 
-chars = ''.join(set(''.join(scripts)))
+chars = ''.join(sorted(set(''.join(scripts))))
 ctable = CharacterTable(chars, MAXLEN)
 print('All symbols: "%s"'%chars)
 
