@@ -16,7 +16,7 @@ Theoretically it introduces shorter term dependencies between source and target.
 
 import sys
 from keras.models import Sequential
-from keras.engine.training import slice_X
+# from keras.engine.training import slice_X
 from keras.layers import Activation, TimeDistributed, Dense, RepeatVector, recurrent
 import numpy as np
 import json
@@ -25,6 +25,11 @@ if len(sys.argv) < 1 :
     sys.exit("Usage: python <script_name> <phonemic-scripts.jsonlines>"
         "* See /data/english_1000.jsonliones for example.")
 INPUT_FILENAME = sys.argv[1]
+
+import datetime, os
+run_id = datetime.datetime.now().strftime('results/run_%Y-%m-%d_%H:%M:%S')
+if not os.path.exists(run_id):
+    os.makedirs(run_id)
 
 class CharacterTable(object):
     '''
@@ -66,17 +71,17 @@ class Color:
         return color + s + Color.close
 
 # Parameters for the model and dataset
-INVERT = True ## invert the input script
+INVERT = False ## invert the input script
 LEN_LIMIT = 12
 # Try replacing GRU, or SimpleRNN
-RNN = recurrent.LSTM
-HIDDEN_SIZE = 128
-BATCH_SIZE = 64
+RNN = recurrent.GRU
+HIDDEN_SIZE = 64
+BATCH_SIZE = 16
 LAYERS = 1
-NB_EPOCH = 1
+EPOCHS = 20
 
 def cleanse(script) :
-    return script.translate({ord(c) : None for c in "'ˌ/:&+}"})
+    return script.translate({ord(c) : None for c in "'ˌ:/&+}"})##'ˌ/:
 
 scripts = set()
 print('Preparing data...')
@@ -114,7 +119,7 @@ y = y[indices]
 
 # Explicitly set apart 10% for validation data that we never train over
 split_at = len(X) - len(X) // 10
-(X_train, X_val) = (slice_X(X, 0, split_at), slice_X(X, split_at))
+(X_train, X_val) = (X[:split_at], X[split_at:])
 (y_train, y_val) = (y[:split_at], y[split_at:])
 
 print(X_train.shape)
@@ -141,11 +146,13 @@ model.compile(loss='categorical_crossentropy',
               metrics=['accuracy'])
 
 # Train the model each generation and show predictions against the validation dataset
-for iteration in range(1, 200):
+model.save(run_id + '/model.h5')
+open(run_id + '/model.json', 'w').write(model.to_json())
+for iteration in range(1, EPOCHS):
     print()
     print('-' * 50)
     print('Iteration', iteration)
-    model.fit(X_train, y_train, batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH,
+    model.fit(X_train, y_train, batch_size=BATCH_SIZE, epochs=1,
               validation_data=(X_val, y_val))
     ###
     # Select 10 samples from the validation set at random so we can visualize errors
@@ -161,3 +168,5 @@ for iteration in range(1, 200):
         print(Color.colorify('☑', color=Color.ok) if correct == guess else Color.colorify('☒', color=Color.fail),
             ''.join(Color.colorify(g, alarm=(g!=c)) for g, c in zip(guess, correct)))
         print('---')
+
+    model.save_weights(run_id + '/model.weights.epoch_%d.h5' % iteration)
