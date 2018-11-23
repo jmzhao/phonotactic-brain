@@ -90,3 +90,6 @@ ENV/
 
 # MacOS
 *.DS_Store
+
+# experiments
+results/
